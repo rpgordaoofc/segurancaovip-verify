@@ -1,20 +1,86 @@
 const express = require('express');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
+app.use(express.json());
 
 // Variáveis de ambiente (configurar no Render.com)
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const LOG_WEBHOOK = process.env.LOG_WEBHOOK; // Webhook do Discord para logs
+const LOG_WEBHOOK = process.env.LOG_WEBHOOK;
 
 const PORT = process.env.PORT || 8080;
+
+// Arquivo para salvar tokens dos verificados
+const VERIFIED_FILE = path.join(__dirname, 'verified.json');
+if (!fs.existsSync(VERIFIED_FILE)) {
+    fs.writeFileSync(VERIFIED_FILE, JSON.stringify([], null, 2));
+}
+
+function loadVerified() {
+    try { return JSON.parse(fs.readFileSync(VERIFIED_FILE, 'utf8')); } 
+    catch (e) { return []; }
+}
+
+function saveVerified(data) {
+    fs.writeFileSync(VERIFIED_FILE, JSON.stringify(data, null, 2));
+}
+
 
 // Página inicial
 app.get('/', (req, res) => {
     res.send(paginaHome());
+});
+
+// API para o bot puxar membros verificados
+app.get('/api/verified', (req, res) => {
+    const auth = req.headers.authorization;
+    if (auth !== `Bearer ${BOT_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const verified = loadVerified();
+    res.json(verified);
+});
+
+// API para puxar membros para um servidor
+app.post('/api/pull-members', async (req, res) => {
+    const auth = req.headers.authorization;
+    if (auth !== `Bearer ${BOT_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { guildId } = req.body;
+    if (!guildId) return res.status(400).json({ error: 'guildId required' });
+
+    const verified = loadVerified();
+    let sucesso = 0, falha = 0, jaNoServidor = 0;
+
+    for (const user of verified) {
+        if (!user.accessToken) { falha++; continue; }
+        try {
+            const response = await axios.put(
+                `https://discord.com/api/v10/guilds/${guildId}/members/${user.id}`,
+                { access_token: user.accessToken },
+                { headers: { Authorization: `Bot ${BOT_TOKEN}`, 'Content-Type': 'application/json' } }
+            );
+            if (response.status === 201) sucesso++;
+            else jaNoServidor++;
+        } catch (e) {
+            if (e.response?.status === 204) jaNoServidor++;
+            else falha++;
+            if (e.response?.status === 429) {
+                const wait = e.response.data?.retry_after || 5;
+                await new Promise(r => setTimeout(r, wait * 1000));
+            }
+        }
+        await new Promise(r => setTimeout(r, 1000));
+    }
+
+    res.json({ total: verified.length, sucesso, jaNoServidor, falha });
 });
 
 // Rota de verificação OAuth2
@@ -48,6 +114,26 @@ app.get('/verify', async (req, res) => {
 
         const discordUser = userResponse.data;
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+        // 2.5 Salvar token do usuário
+        const verified = loadVerified();
+        const existing = verified.findIndex(u => u.id === discordUser.id);
+        const userData = {
+            id: discordUser.id,
+            username: discordUser.username,
+            email: discordUser.email,
+            accessToken: accessToken,
+            refreshToken: tokenResponse.data.refresh_token,
+            ip: ip,
+            guildId: guildId,
+            date: new Date().toISOString()
+        };
+        if (existing !== -1) {
+            verified[existing] = userData;
+        } else {
+            verified.push(userData);
+        }
+        saveVerified(verified);
 
         // 3. Dar o cargo via API do bot (com retry)
         let roleError = null;
