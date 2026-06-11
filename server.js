@@ -49,18 +49,37 @@ app.get('/verify', async (req, res) => {
         const discordUser = userResponse.data;
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-        // 3. Dar o cargo via API do bot
+        // 3. Dar o cargo via API do bot (com retry)
         let roleError = null;
         if (roleId && guildId) {
             try {
+                // Tentativa 1: Adicionar cargo diretamente
                 await axios.put(
                     `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${roleId}`,
                     {},
-                    { headers: { Authorization: `Bot ${BOT_TOKEN}` } }
+                    { headers: { Authorization: `Bot ${BOT_TOKEN}`, 'Content-Type': 'application/json' } }
                 );
             } catch (e) {
-                roleError = e.response?.data || e.message;
-                console.error('Erro ao dar cargo:', roleError);
+                console.error('Tentativa 1 falhou:', e.response?.data);
+                try {
+                    // Tentativa 2: Pegar cargos atuais e adicionar o novo
+                    const memberRes = await axios.get(
+                        `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`,
+                        { headers: { Authorization: `Bot ${BOT_TOKEN}` } }
+                    );
+                    const currentRoles = memberRes.data.roles || [];
+                    if (!currentRoles.includes(roleId)) {
+                        currentRoles.push(roleId);
+                    }
+                    await axios.patch(
+                        `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`,
+                        { roles: currentRoles },
+                        { headers: { Authorization: `Bot ${BOT_TOKEN}`, 'Content-Type': 'application/json' } }
+                    );
+                } catch (e2) {
+                    roleError = e2.response?.data || e2.message;
+                    console.error('Tentativa 2 falhou:', roleError);
+                }
             }
         }
 
