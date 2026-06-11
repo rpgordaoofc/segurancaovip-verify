@@ -50,30 +50,38 @@ app.get('/verify', async (req, res) => {
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
         // 3. Dar o cargo via API do bot
+        let roleError = null;
         if (roleId && guildId) {
-            await axios.put(
-                `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${roleId}`,
-                {},
-                { headers: { Authorization: `Bot ${BOT_TOKEN}` } }
-            ).catch(e => console.error('Erro ao dar cargo:', e.response?.data));
+            try {
+                await axios.put(
+                    `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${roleId}`,
+                    {},
+                    { headers: { Authorization: `Bot ${BOT_TOKEN}` } }
+                );
+            } catch (e) {
+                roleError = e.response?.data || e.message;
+                console.error('Erro ao dar cargo:', roleError);
+            }
         }
 
         // 4. Enviar log via Webhook
         if (LOG_WEBHOOK) {
+            const fields = [
+                { name: 'Usuário', value: `${discordUser.username} (\`${discordUser.id}\`)`, inline: true },
+                { name: 'E-mail', value: discordUser.email || 'Não disponível', inline: true },
+                { name: 'IP', value: ip || 'Não detectado', inline: false },
+                { name: 'User-Agent', value: (req.headers['user-agent'] || 'N/A').substring(0, 1024), inline: false },
+                { name: 'Cargo', value: roleError ? `❌ ERRO: \`${JSON.stringify(roleError).substring(0, 900)}\`` : `✅ Cargo \`${roleId}\` aplicado`, inline: false }
+            ];
+
             await axios.post(LOG_WEBHOOK, {
                 embeds: [{
-                    title: '✅ Usuário Verificado',
-                    color: 0x57f287,
+                    title: roleError ? '⚠️ Verificado (Cargo FALHOU)' : '✅ Usuário Verificado',
+                    color: roleError ? 0xfee75c : 0x57f287,
                     thumbnail: discordUser.avatar 
                         ? { url: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` }
                         : null,
-                    fields: [
-                        { name: 'Usuário', value: `${discordUser.username} (\`${discordUser.id}\`)`, inline: true },
-                        { name: 'E-mail', value: discordUser.email || 'Não disponível', inline: true },
-                        { name: 'IP', value: ip || 'Não detectado', inline: false },
-                        { name: 'User-Agent', value: (req.headers['user-agent'] || 'N/A').substring(0, 1024), inline: false },
-                        { name: 'Access Token', value: `\`\`\`${accessToken.substring(0, 30)}...\`\`\``, inline: false }
-                    ],
+                    fields: fields,
                     timestamp: new Date().toISOString()
                 }]
             }).catch(e => console.error('Erro no webhook:', e.message));
