@@ -1,0 +1,13 @@
+{
+  "name": "seguranca-verify",
+  "version": "1.0.0",
+  "description": "Servidor de verificação OAuth2 para o bot PROTECT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.17.0",
+    "express": "^4.19.2"
+  }
+}
