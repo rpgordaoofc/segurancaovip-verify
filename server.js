@@ -209,8 +209,8 @@ app.get('/verify', async (req, res) => {
         res.send(paginaSucesso(discordUser.username, inviteUrl));
 
     } catch (error) {
-        console.error('Erro OAuth2:', error.response?.data || error.message);
-        res.status(500).send(paginaErro('Erro ao processar verificação. Tente novamente.'));
+        console.error('Erro OAuth2:', JSON.stringify(error.response?.data || error.message));
+        res.status(500).send(paginaErro(`Erro ao processar verificação. Detalhes: ${JSON.stringify(error.response?.data?.error || error.message)}`));
     }
 });
 
