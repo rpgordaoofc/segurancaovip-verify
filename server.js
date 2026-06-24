@@ -1,33 +1,47 @@
 const express = require('express');
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 
 const app = express();
 app.use(express.json());
 
-// Variáveis de ambiente (configurar no Render.com)
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const LOG_WEBHOOK = process.env.LOG_WEBHOOK;
+const GIST_TOKEN = process.env.GIST_TOKEN;  // GitHub Personal Access Token
+const GIST_ID = process.env.GIST_ID;        // ID do Gist criado
 
 const PORT = process.env.PORT || 8080;
 
-// Arquivo para salvar tokens dos verificados
-const VERIFIED_FILE = path.join(__dirname, 'verified.json');
-if (!fs.existsSync(VERIFIED_FILE)) {
-    fs.writeFileSync(VERIFIED_FILE, JSON.stringify([], null, 2));
+// ═══════════════════════════════════════
+// BANCO DE DADOS: GitHub Gist (persistente)
+// ═══════════════════════════════════════
+async function loadVerified() {
+    if (!GIST_TOKEN || !GIST_ID) return [];
+    try {
+        const res = await axios.get(`https://api.github.com/gists/${GIST_ID}`, {
+            headers: { Authorization: `token ${GIST_TOKEN}` }
+        });
+        const content = res.data.files['verified.json']?.content;
+        return content ? JSON.parse(content) : [];
+    } catch (e) {
+        console.error('[DB] Erro ao carregar:', e.message);
+        return [];
+    }
 }
 
-function loadVerified() {
-    try { return JSON.parse(fs.readFileSync(VERIFIED_FILE, 'utf8')); } 
-    catch (e) { return []; }
-}
-
-function saveVerified(data) {
-    fs.writeFileSync(VERIFIED_FILE, JSON.stringify(data, null, 2));
+async function saveVerified(data) {
+    if (!GIST_TOKEN || !GIST_ID) return;
+    try {
+        await axios.patch(`https://api.github.com/gists/${GIST_ID}`, {
+            files: { 'verified.json': { content: JSON.stringify(data, null, 2) } }
+        }, {
+            headers: { Authorization: `token ${GIST_TOKEN}` }
+        });
+    } catch (e) {
+        console.error('[DB] Erro ao salvar:', e.message);
+    }
 }
 
 
