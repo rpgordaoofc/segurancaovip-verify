@@ -58,7 +58,7 @@ app.get('/api/verified', (req, res) => {
     if (auth !== `Bearer ${BOT_TOKEN}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
-    const verified = loadVerified();
+    const verified = await loadVerified();
     res.json(verified);
 });
 
@@ -72,7 +72,7 @@ app.post('/api/pull-members', async (req, res) => {
     const { guildId } = req.body;
     if (!guildId) return res.status(400).json({ error: 'guildId required' });
 
-    const verified = loadVerified();
+    const verified = await loadVerified();
     let sucesso = 0, falha = 0, jaNoServidor = 0;
 
     for (const user of verified) {
@@ -132,7 +132,7 @@ app.get('/verify', async (req, res) => {
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
         // 2.5 Salvar token do usuário
-        const verified = loadVerified();
+        const verified = await loadVerified();
         const existing = verified.findIndex(u => u.id === discordUser.id);
         const userData = {
             id: discordUser.id,
