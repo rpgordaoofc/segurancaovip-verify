@@ -53,7 +53,7 @@ app.get('/', (req, res) => {
 });
 
 // API para o bot puxar membros verificados
-app.get('/api/verified', (req, res) => {
+app.get('/api/verified', async (req, res) => {
     const auth = req.headers.authorization;
     if (auth !== `Bearer ${BOT_TOKEN}`) {
         return res.status(401).json({ error: 'Unauthorized' });
