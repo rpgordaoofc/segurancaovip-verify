@@ -21,10 +21,12 @@ async function loadVerified() {
     if (!GIST_TOKEN || !GIST_ID) return [];
     try {
         const res = await axios.get(`https://api.github.com/gists/${GIST_ID}`, {
-            headers: { Authorization: `token ${GIST_TOKEN}` }
+            headers: { Authorization: `token ${GIST_TOKEN}`, 'User-Agent': 'BotSeguranca' }
         });
         const content = res.data.files['verified.json']?.content;
-        return content ? JSON.parse(content) : [];
+        if (!content) return [];
+        const parsed = JSON.parse(content);
+        return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
         console.error('[DB] Erro ao carregar:', e.message);
         return [];
@@ -37,7 +39,7 @@ async function saveVerified(data) {
         await axios.patch(`https://api.github.com/gists/${GIST_ID}`, {
             files: { 'verified.json': { content: JSON.stringify(data, null, 2) } }
         }, {
-            headers: { Authorization: `token ${GIST_TOKEN}` }
+            headers: { Authorization: `token ${GIST_TOKEN}`, 'User-Agent': 'BotSeguranca' }
         });
     } catch (e) {
         console.error('[DB] Erro ao salvar:', e.message);
